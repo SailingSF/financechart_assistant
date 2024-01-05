@@ -27,7 +27,8 @@ def run_thread(client, thread, assistant_id):
         if run.status == 'requires_action':
             run = handle_action(client, run, thread.id)
 
-        elif run.status == 'queued':
+        elif run.status == 'queued' or run.status == 'in_progress':
+            print("run is: " + run.status)
             time.sleep(2)
             run = client.beta.threads.runs.retrieve(
                 thread_id=thread.id, 
@@ -35,6 +36,7 @@ def run_thread(client, thread, assistant_id):
             )
         else:
             print("Run status is: " + run.status)
+            break
 
     # get most recent message and return
     message = client.beta.threads.messages.list(thread_id=thread.id).data[0]
@@ -48,17 +50,22 @@ def handle_action(client, run, thread_id):
     '''
     # get calls from run object and run functions locally
     outputs = []
-    for tool_call in run.required_action.submitted_tool_outputs.tool_calls:
+    print("handling action")
+    for tool_call in run.required_action.submit_tool_outputs.tool_calls:
         function_name = tool_call.function.name
         arguments = json.loads(tool_call.function.arguments)
+        print("running function: " + function_name + "\nwith arguments: \n" + str(arguments))
 
         try:
             function_to_call = getattr(assistant_functions, function_name)
         
         except Exception as e:
             print("Error getting function: \n" + e)
+            break
         
+        print("calling function")
         output = function_to_call(**arguments)
+        print("received output of: \n" + output)
 
         outputs.append({"tool_call_id": tool_call.id, 
                         "output": output
